@@ -1,0 +1,70 @@
+name: Build VCoach Installer
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:   # lets you trigger it manually from GitHub UI
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Windows installer
+        run: npm run build-win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Find installer file
+        id: find_file
+        shell: powershell
+        run: |
+          $file = Get-ChildItem -Path dist -Filter "*.exe" | Select-Object -First 1
+          echo "FILE_PATH=dist/$($file.Name)" >> $env:GITHUB_OUTPUT
+          echo "FILE_NAME=$($file.Name)" >> $env:GITHUB_OUTPUT
+          echo "Found: $($file.Name)"
+
+      - name: Upload installer as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VCoach-Windows-Installer
+          path: dist/*.exe
+          retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: VCoach v1.0.${{ github.run_number }}
+          body: |
+            ## VCoach — Valorant Pattern Coach
+
+            ### Install
+            Download **VCoach-Setup.exe** below and run it.
+
+            ### What's included
+            - Transparent always-on-top overlay
+            - Live pattern detection via Riot Local API
+            - Dashboard with tip log & settings
+            - Auto-uninstalls previous versions
+
+            ### Valorant TOS
+            ✅ Uses only Riot's official Local Client API (port 2999). No memory reading, no injection.
+          files: dist/*.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
